@@ -15,3 +15,6 @@ Clang-LLVM: clang++ -O3 -Wall -W -pedantic-errors server.cpp -o server
 Instructions for Using the Program:
 Launch the server executable from a host machine, then clients can use their
 executable to communicate with the server.
+
+License
+Licensed under the Academic Free License version 3.0
