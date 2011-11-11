@@ -3,10 +3,6 @@
 #include <cstring>
 #include <cstdlib>
 #include <csignal>
-#include <pthread.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <netdb.h>
 #include "server.h"
 
