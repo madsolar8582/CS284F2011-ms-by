@@ -1,10 +1,6 @@
 
-/*
-This is what I have gotten done so far...
-Note: something in handleClient() is not working correctly, so the server isn't seeing the clients responses
-*/
-
 #include <iostream>
+#include <cstring>
 #include <cstdlib>
 #include <csignal>
 #include <pthread.h>
@@ -24,7 +20,7 @@ pthread_t threads[MAX_CLIENTS];
 
 int main(int argc, char * argv[])
 {
-  // Check the program arguments for port setting
+	// Check the program arguments for port setting
 	unsigned short port = DEFAULT_PORT;
 
 	if (argc >= 2)
@@ -62,7 +58,7 @@ int main(int argc, char * argv[])
 	cout << "* Server is listening for clients... *" << endl;
 
 	// Watch for abort, terminate or interupt signals
-    signal(SIGABRT, & signalHandler);
+	signal(SIGABRT, & signalHandler);
 	signal(SIGTERM, & signalHandler);
 	signal(SIGINT, & signalHandler);
 
@@ -73,7 +69,7 @@ int main(int argc, char * argv[])
 		if (currentConnections >= MAX_CLIENTS)
 		{
 			cout << "* Connection to host refused! (Max Clients Exceeded) *" << endl;
-			write(newsfd, "* Connection closed! (Max Clients Exceeded) *", 45);
+			write(newsfd, "* CODE 01 *", 11);
 			close(newsfd);
 		}
 		else
@@ -90,9 +86,7 @@ int main(int argc, char * argv[])
 
 			// Handle this new client
 			pthread_create(& threads[currentConnections], NULL, handleClient, NULL);
-
 		}
-
 	}
 
 	// Should never reach this
@@ -101,10 +95,10 @@ int main(int argc, char * argv[])
 	return 0;
 }
 
-void signalHandler(int sig)
+void signalHandler(int signal)
 {
 	// Let each client know the server is going down
-	writeToAll("* Server shutting down in 10 seconds! *");
+	writeToAll("* CODE 00 *");
 
 	// Disallow new connections
 	pthread_mutex_lock(& clientMutex);
@@ -126,25 +120,23 @@ void signalHandler(int sig)
 
 void * handleClient(void * ptr)
 {
-	int clientID = currentConnections;
-	int socketfd = clientSockets[clientID];
+	int clientID = currentConnections - 1;
 	char buffer[256];
+	memset(buffer, '\0', 256);
 
-	cout << "test" << endl;
-	while (read(socketfd, buffer, 255) > 0)
-	
+	while (read(clientSockets[clientID], buffer, 255) > 0)
 	{
-		cout << "message gotten" << endl;
 		writeToAll(buffer);
+		memset(buffer, '\0', 256);
 	}
 
-	cout << "killing thread" << endl;
-	
 	// Remove this client
+	close(clientSockets[clientID]);
+
 	pthread_mutex_lock(& clientMutex);
 	clientSockets[clientID] = -1;
 	pthread_mutex_unlock(& clientMutex);
-	close(socketfd);
+
 	pthread_exit(ptr);
 }
 
@@ -155,7 +147,7 @@ void writeToAll(const char content[256])
 	{
 		if (clientSockets[i] != -1)
 		{
-			write(clientSockets[i], content, 255);
+			write(clientSockets[i], content, strlen(content));
 		}
 	}
 	pthread_mutex_unlock(& clientMutex);
