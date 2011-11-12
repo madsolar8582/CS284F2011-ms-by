@@ -1,4 +1,10 @@
+/***
+|* Created by Brian Yarbrough & Madison Solarana
+|* Created on 11/10/2011
+|* Last Modified on 11/12/2011
+***/
 
+// ### INCLUDES ################################################################
 #include <iostream>
 #include <cstring>
 #include <cstdlib>
@@ -8,14 +14,19 @@
 
 using namespace std;
 
-// Global Variables
+// ### GLOBAL VARIABLES ########################################################
+unsigned short currentConnections = 0;
 int socketfd, clientSockets[MAX_CLIENTS];
 pthread_mutex_t clientMutex;
-unsigned short currentConnections = 0;
 pthread_t threads[MAX_CLIENTS];
+char clientNicks[MAX_CLIENTS][31]; // Should not be changed!
 
+// #############################################################################
+// ############################# START MAIN SCRIPT #############################
+// #############################################################################
 int main(int argc, char * argv[])
 {
+	// ### LOAD PROGRAM PARAMETERS #############################################
 	// Check the program arguments for port setting
 	unsigned short port = DEFAULT_PORT;
 
@@ -24,6 +35,7 @@ int main(int argc, char * argv[])
 		port = strtol(argv[1], NULL, 10);
 	}
 
+	// ### SETUP THE SERVER ####################################################
 	// Create a stream socket
 	int newsfd;
 	struct sockaddr_in server_addr = { AF_INET, htons(port) };
@@ -37,7 +49,7 @@ int main(int argc, char * argv[])
 	}
 
 	// Bind the socket to an internet port
-	if (bind(socketfd, (struct sockaddr *) & server_addr, sizeof(server_addr)) == -1)
+	if (bind(socketfd, (struct sockaddr *) &server_addr, sizeof(server_addr)) == -1)
 	{
 		cerr << "* Error: Bind Failed! *" << endl;
 		return 1;
@@ -53,60 +65,113 @@ int main(int argc, char * argv[])
 	// Let the user know the server is now listening for clients
 	cout << "* Server is listening for clients... *" << endl;
 
-	// Watch for abort, terminate or interupt signals
-	signal(SIGABRT, & signalHandler);
-	signal(SIGTERM, & signalHandler);
-	signal(SIGINT, & signalHandler);
+	// ### WATCH FOR ABORT, TERMINATE & INTERUPT SIGNALS #######################
+	signal(SIGABRT, &signalHandler);
+	signal(SIGTERM, &signalHandler);
+	signal(SIGINT, &signalHandler);
 
-	// Loop forever
-	while ((newsfd = accept(socketfd, (struct sockaddr *) & client_addr, & client_len)) > 0)
+	// ### LOOK FOR CONNECTING USERS ###########################################
+	while ((newsfd = accept(socketfd, (struct sockaddr *) &client_addr, &client_len)) > 0)
 	{  
 		// Check if we are at MAX_CLIENTS currently
 		if (currentConnections >= MAX_CLIENTS)
 		{
-			cout << "* Connection to host refused! (Max Clients Exceeded) *" << endl;
+			cout << "* Connection to client refused! (Max Clients Exceeded) *" << endl;
 			write(newsfd, "* CODE 01 *", 11);
 			close(newsfd);
 		}
 		else
 		{
-			// Update the current connection count
-			pthread_mutex_lock(& clientMutex);
-			clientSockets[currentConnections++] = newsfd;
-			pthread_mutex_unlock(& clientMutex); 
+			// Get the username of this client
+			char nick[31];
+			memset(nick, '\0', 31);
 
-			if (currentConnections >= MAX_CLIENTS)
+			if (read(newsfd, nick, 30) <= 0)
 			{
-				cout << "* Max Clients Reached! *" << endl;
+				// Kill this connection since we can't read in the nick
+				cout << "* Connection to client failed! *" << endl;
+				close(newsfd);
+				continue;
 			}
 
+			pthread_mutex_lock(&clientMutex);
+
+			// Check that no one else is using that nick
+			bool used = false;
+
+			for (unsigned short i = 0; i < currentConnections; i++)
+			{
+				if (strcmp(nick, clientNicks[i]) == 0)
+				{
+					// Kill this connection as this nick is already in use
+					cout << "* Connection to client refused! (Nick Already In Use) *" << endl;
+					write(newsfd, "* CODE 02 *", 11);
+					close(newsfd);
+					used = true;
+					break;
+				}
+			}
+
+			if (used)
+			{ 
+				pthread_mutex_unlock(&clientMutex); 
+				continue;
+			}
+
+			// Update the current connection count and add this user to the client sockets/nick arrays
+			clientSockets[currentConnections] = newsfd;
+			strcpy(clientNicks[currentConnections], nick);
+			currentConnections++;
+
+			pthread_mutex_unlock(&clientMutex); 
+
 			// Handle this new client
-			pthread_create(& threads[currentConnections], NULL, handleClient, NULL);
+			if (pthread_create(&threads[currentConnections], NULL, handleClient, NULL) != 0)
+			{
+				// Failed to create the thread, so remove the client, kill the connection and let the server know
+				currentConnections--;
+
+				cout << "* Connection to client failed! (Failed To Create New Thread) *" << endl;
+				write(newsfd, "* CODE 03 *", 11);
+				close(newsfd);
+			}
 		}
 	}
 
-	// Should never reach this
+	// ### CLOSE OUT THE SERVER ################################################
+	// Should never reach this, but just in case
 	close(socketfd);
 
 	return 0;
 }
+// #############################################################################
+// ############################## END MAIN SCRIPT ##############################
+// #############################################################################
 
+// ### FUNCTION DEFINITIONS ####################################################
+/***
+|* @func	signalHandler
+|* @desc	Handles abort, terminate & interupt signals.
+|*
+|* @param	int		signal		The signal the script recieved.
+***/
 void signalHandler(int signal)
 {
 	// Let each client know the server is going down
 	writeToAll("* CODE 00 *");
 
 	// Disallow new connections
-	pthread_mutex_lock(& clientMutex);
+	pthread_mutex_lock(&clientMutex);
 
 	// Let the user know the server is going down
 	cout << "* Server is shutting down... *" << endl;
 
 	// Wait 10 seconds
+	sleep(10);
 
 	// Kill the server
 	close(socketfd);
-	pthread_mutex_unlock(& clientMutex);
+	pthread_mutex_unlock(&clientMutex);
 
 	// Let the user know the server has shut down
 	cout << "* Server has shut down! *" << endl;
@@ -114,37 +179,117 @@ void signalHandler(int signal)
 	exit(0);
 }
 
+/***
+|* @func	handleClient
+|* @desc	Handles a new client. (For use with pthread_create only!)
+***/
 void * handleClient(void * ptr)
 {
-	int clientID = currentConnections - 1;
-	char buffer[256];
+	unsigned short clientID = currentConnections - 1;
+	char buffer[226];
+
+	// Let everyone know that this user has joined
+	strcpy(buffer, "* ");
+	strcat(buffer, clientNicks[clientID]);
+	strcat(buffer, " has connected! *");
+	writeToAllOthers(buffer, clientID);
+	cout << buffer << endl;
+
+	// Check if we have hit MAX_CLIENTS
+	if (currentConnections >= MAX_CLIENTS)
+	{
+		cout << "* Max Clients Reached! *" << endl;
+	}
+
+	// Start waiting for more responses from the client
 	memset(buffer, '\0', 256);
 
-	while (read(clientSockets[clientID], buffer, 255) > 0)
+	while (read(clientSockets[clientID], buffer, 225) > 0)
 	{
-		writeToAll(buffer);
-		memset(buffer, '\0', 256);
+		writeMessage(buffer, clientID);
+		memset(buffer, '\0', 226);
 	}
 
 	// Remove this client
+	pthread_mutex_lock(&clientMutex);
+
 	close(clientSockets[clientID]);
-
-	pthread_mutex_lock(& clientMutex);
 	clientSockets[clientID] = -1;
-	pthread_mutex_unlock(& clientMutex);
+	
+	// Let everyone know that this user has disconnected
+	strcpy(buffer, "* ");
+	strcat(buffer, clientNicks[clientID]);
+	strcat(buffer, " has disconnected! *");
+	strcpy(clientNicks[clientID], "");
 
+	pthread_mutex_unlock(&clientMutex);
+
+	writeToAllOthers(buffer, clientID);
+	cout << buffer << endl;
+
+	// Close out this thread
 	pthread_exit(ptr);
 }
 
-void writeToAll(const char content[256])
+/***
+|* @func	writeToAll
+|* @desc	Writes a message to all clients.
+|*
+|* @param	char[]	message		The message to write to all clients.
+***/
+void writeToAll(const char message[])
 {
-	pthread_mutex_lock(& clientMutex);
+	pthread_mutex_lock(&clientMutex);
+
 	for (unsigned short i = 0; i < currentConnections; i++)
 	{
 		if (clientSockets[i] != -1)
 		{
-			write(clientSockets[i], content, strlen(content));
+			write(clientSockets[i], message, strlen(message));
 		}
 	}
-	pthread_mutex_unlock(& clientMutex);
+
+	pthread_mutex_unlock(&clientMutex);
+}
+
+/***
+|* @func	writeToAllOthers
+|* @desc	Writes a message to all clients except the one the message is from.
+|*
+|* @param	char[]			message		The message to write to all clients.
+|* @param	unsigned short	from		The client this message is from.
+***/
+void writeToAllOthers(const char message[], unsigned short from)
+{
+	pthread_mutex_lock(&clientMutex);
+
+	for (unsigned short i = 0; i < currentConnections; i++)
+	{
+		if (clientSockets[i] != -1 && i != from)
+		{
+			write(clientSockets[i], message, strlen(message));
+		}
+	}
+
+	pthread_mutex_unlock(&clientMutex);
+}
+
+/***
+|* @func	writeMessage
+|* @desc	Formats a message before writing it to all clients except the one the message is from.
+|*
+|* @param	char[]			message		The message to write to all clients.
+|* @param	unsigned short	from		The client this message is from.
+***/
+void writeMessage(const char message[], unsigned short from)
+{
+	char send[256];
+
+	// Append the user's nick to the message
+	strcpy(send, clientNicks[from]);
+	strcat(send, ": ");
+	strcat(send, message);
+
+	// Write the message to everyone else
+	writeToAllOthers(send, from);
 }
