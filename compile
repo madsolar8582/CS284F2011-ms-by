@@ -1,0 +1,24 @@
+#!/bin/bash
+
+clear
+if [ -f server ]; then
+  rm -fr server
+fi
+if [ -f client ]; then
+ rm -fr client
+fi
+
+echo -e "\033[33m > Now compiling your programs...\033[0m"
+clang++ -O3 -Wall -W -pedantic-errors client.cpp -o client -lpthread
+clang++ -O3 -Wall -W -pedantic-errors server.cpp -o server -lpthread
+if [ -f server ]; then
+  echo -e "\033[32m > Server compilation was successful.\033[0m"
+else
+  echo -e "\033[31m > Server compilation was not successful.\033[0m"
+fi
+if [ -f client ]; then
+  echo -e "\033[32m > Client compilation was successful.\033[0m"
+else
+  echo -e "\033[31m > Client compilation was not successful.\033[0m"
+fi
+
