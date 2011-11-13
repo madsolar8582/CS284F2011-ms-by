@@ -16,6 +16,7 @@ using namespace std;
 // ### GLOBAL VARIABLES ########################################################
 int socketfd; 
 pthread_t readThread;
+char nick[31];
 
 // #############################################################################
 // ############################# START MAIN SCRIPT #############################
@@ -29,6 +30,8 @@ int main(int argc, char * argv[])
 		cerr << "Usage is: \"" << argv[0] << " nick server [port]\"" << endl;
 		return 1;
 	}
+
+	strcpy(nick, argv[1]);
 
 	// Check the program arguments for port setting
 	unsigned short port = DEFAULT_PORT;
@@ -46,7 +49,7 @@ int main(int argc, char * argv[])
 	struct hostent * host; 
 
 	// Let the user know we are trying to connect
-	cout << "* Connecting to " << argv[2] << ":" << port << " as " << argv[1] << "... *" << endl;
+	cout << "* Connecting to " << argv[2] << ":" << port << " as " << nick << "... *" << endl;
 
 	// Get the host
 	if ((host = gethostbyname(argv[2])) == NULL)
@@ -72,7 +75,7 @@ int main(int argc, char * argv[])
 	}
 
 	// Send our nick to the server
-	write(socketfd, argv[1], strlen(argv[1]));
+	write(socketfd, nick, strlen(nick));
 
 	// Let the user know we have connected
 	cout << "* Connection Successful! *" << endl;
@@ -91,6 +94,7 @@ int main(int argc, char * argv[])
 
 	while (1)
 	{
+		cout << nick << ": ";
 		cin >> buffer;
 
 		// Check if they are wanting to see the about popup
@@ -133,7 +137,8 @@ int main(int argc, char * argv[])
 void interuptHandler(int signal)
 {
 	// Let the user know the server is going down
-	cout << "* Error: You must use \"/exit\", \"/quit\" or \"/part\" to exit! *" << endl;
+	cout << "\r* Error: You must use \"/exit\", \"/quit\" or \"/part\" to exit! *" << endl;
+	cout << nick << ": " << flush;
 }
 
 /**
@@ -204,7 +209,8 @@ void * readFromServer(void * dmyptr)
 		}
 
 		// Show the text & reset the buffer
-		cout << buffer << endl;
+		cout << "\r" << buffer << endl;
+		cout << nick << ": " << flush;
 		memset(buffer, '\0', 226);
 	}
 
