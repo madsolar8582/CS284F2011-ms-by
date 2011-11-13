@@ -24,7 +24,7 @@ void signalHandler(int signal);
 |* @func	handleClient
 |* @desc	Handles a new client. (For use with pthread_create only!)
 ***/
-void * handleClient(void * sockfd);
+void * handleClient(void * cid);
 
 /***
 |* @func	writeToAll
