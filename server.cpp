@@ -78,6 +78,7 @@ int main(int argc, char * argv[])
 
 	// ### LOOK FOR CONNECTING USERS ###########################################
 	int newsfd;
+	unsigned short cid;
 
 	while ((newsfd = accept(socketfd, (struct sockaddr *) &client_addr, &client_len)) > 0)
 	{
@@ -127,12 +128,12 @@ int main(int argc, char * argv[])
 			}
 
 			// Update the current connection count and add this user to the client sockets/nick arrays
-			for (unsigned short i = 0; i < MAX_CLIENTS; i++)
+			for (cid = 0; cid < MAX_CLIENTS; cid++)
 			{
-				if (clientSockets[i] == -1)
+				if (clientSockets[cid] == -1)
 				{
-					clientSockets[i] = newsfd;
-					strcpy(clientNicks[i], nick);
+					clientSockets[cid] = newsfd;
+					strcpy(clientNicks[cid], nick);
 
 					break;
 				}
@@ -143,10 +144,16 @@ int main(int argc, char * argv[])
 			pthread_mutex_unlock(&clientMutex); 
 
 			// Handle this new client
-			if (pthread_create(&threads[currentConnections], NULL, handleClient, (void *) newsfd) != 0)
+			if (pthread_create(&threads[currentConnections], NULL, handleClient, (void *) cid) != 0)
 			{
 				// Failed to create the thread, so remove the client, kill the connection and let the server know
+				pthread_mutex_lock(&clientMutex);
 				currentConnections--;
+
+				clientSockets[cid] = -1;
+				strcpy(clientNicks[cid], "");
+
+				pthread_mutex_unlock(&clientMutex);
 
 				cerr << "* Connection to client failed! (Failed To Create New Thread) *" << endl;
 				write(newsfd, "* CODE 03 *", 11);
@@ -200,19 +207,10 @@ void signalHandler(int signal)
 |* @func	handleClient
 |* @desc	Handles a new client. (For use with pthread_create only!)
 ***/
-void * handleClient(void * sockfd)
+void * handleClient(void * cid)
 {
-	unsigned short clientID;
+	unsigned short clientID = (long) cid;
 	char buffer[226];
-
-	// Find this client's ID
-	for (clientID = 0; clientID < MAX_CLIENTS; clientID++)
-	{
-		if (clientSockets[clientID] == (long) sockfd)
-		{
-			break;
-		}
-	}
 
 	// Let everyone know that this user has joined
 	strcpy(buffer, "* ");
