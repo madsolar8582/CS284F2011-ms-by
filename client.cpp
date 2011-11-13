@@ -146,7 +146,7 @@ void about()
 	cout << "*              About Simple Chat              *" << endl;
 	cout << "*                                             *" << endl;
 	cout << "* Authors: Brian Yarbrough & Madison Solarana *" << endl;
-	cout << "* Version: 1.0.0 Alpha                        *" << endl;
+	cout << "* Version: 1.0.0                              *" << endl;
 	cout << "***********************************************" << endl;
 
 	return;
@@ -156,7 +156,7 @@ void about()
 |* @func	readFromServer
 |* @desc	Watches for data from the server. (For use with pthread_create only!)
 ***/
-void * readFromServer(void * ptr)
+void * readFromServer(void * dmyptr)
 {
 	char buffer[226];
 	memset(buffer, '\0', 226);
@@ -209,5 +209,5 @@ void * readFromServer(void * ptr)
 	}
 
 	// Close out this thread
-	pthread_exit(ptr);
+	pthread_exit(NULL);
 }
