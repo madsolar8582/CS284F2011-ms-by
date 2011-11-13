@@ -35,6 +35,13 @@ int main(int argc, char * argv[])
 		port = strtol(argv[1], NULL, 10);
 	}
 
+	// ### INITIALIZE THE SOCKETS/NICKS ########################################
+	for (unsigned short i = 0; i < MAX_CLIENTS; i++)
+	{
+		clientSockets[i] = -1;
+		strcpy(clientNicks[i], "");
+	}
+
 	// ### SETUP THE SERVER ####################################################
 	struct sockaddr_in server_addr = { AF_INET, htons(port) };
 	struct sockaddr_in client_addr = { AF_INET };
@@ -73,7 +80,7 @@ int main(int argc, char * argv[])
 	int newsfd;
 
 	while ((newsfd = accept(socketfd, (struct sockaddr *) &client_addr, &client_len)) > 0)
-	{  
+	{
 		// Check if we are at MAX_CLIENTS currently
 		if (currentConnections >= MAX_CLIENTS)
 		{
@@ -100,7 +107,7 @@ int main(int argc, char * argv[])
 			// Check that no one else is using that nick
 			bool used = false;
 
-			for (unsigned short i = 0; i < currentConnections; i++)
+			for (unsigned short i = 0; i < MAX_CLIENTS; i++)
 			{
 				if (strcmp(nick, clientNicks[i]) == 0)
 				{
@@ -120,14 +127,23 @@ int main(int argc, char * argv[])
 			}
 
 			// Update the current connection count and add this user to the client sockets/nick arrays
-			clientSockets[currentConnections] = newsfd;
-			strcpy(clientNicks[currentConnections], nick);
+			for (unsigned short i = 0; i < MAX_CLIENTS; i++)
+			{
+				if (clientSockets[i] == -1)
+				{
+					clientSockets[i] = newsfd;
+					strcpy(clientNicks[i], nick);
+
+					break;
+				}
+			}
+
 			currentConnections++;
 
 			pthread_mutex_unlock(&clientMutex); 
 
 			// Handle this new client
-			if (pthread_create(&threads[currentConnections], NULL, handleClient, NULL) != 0)
+			if (pthread_create(&threads[currentConnections], NULL, handleClient, (void *) newsfd) != 0)
 			{
 				// Failed to create the thread, so remove the client, kill the connection and let the server know
 				currentConnections--;
@@ -184,10 +200,19 @@ void signalHandler(int signal)
 |* @func	handleClient
 |* @desc	Handles a new client. (For use with pthread_create only!)
 ***/
-void * handleClient(void * ptr)
+void * handleClient(void * sockfd)
 {
-	unsigned short clientID = currentConnections - 1;
+	unsigned short clientID;
 	char buffer[226];
+
+	// Find this client's ID
+	for (clientID = 0; clientID < MAX_CLIENTS; clientID++)
+	{
+		if (clientSockets[clientID] == (long) sockfd)
+		{
+			break;
+		}
+	}
 
 	// Let everyone know that this user has joined
 	strcpy(buffer, "* ");
@@ -223,13 +248,15 @@ void * handleClient(void * ptr)
 	strcat(buffer, " has disconnected! *");
 	strcpy(clientNicks[clientID], "");
 
+	currentConnections--;
+
 	pthread_mutex_unlock(&clientMutex);
 
 	writeToAllOthers(buffer, clientID);
 	cout << buffer << endl;
 
 	// Close out this thread
-	pthread_exit(ptr);
+	pthread_exit(NULL);
 }
 
 /***
@@ -242,7 +269,7 @@ void writeToAll(const char message[])
 {
 	pthread_mutex_lock(&clientMutex);
 
-	for (unsigned short i = 0; i < currentConnections; i++)
+	for (unsigned short i = 0; i < MAX_CLIENTS; i++)
 	{
 		if (clientSockets[i] != -1)
 		{
@@ -264,7 +291,7 @@ void writeToAllOthers(const char message[], unsigned short from)
 {
 	pthread_mutex_lock(&clientMutex);
 
-	for (unsigned short i = 0; i < currentConnections; i++)
+	for (unsigned short i = 0; i < MAX_CLIENTS; i++)
 	{
 		if (clientSockets[i] != -1 && i != from)
 		{
