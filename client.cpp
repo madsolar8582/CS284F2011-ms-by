@@ -14,15 +14,15 @@
 using namespace std;
 
 // ### GLOBAL VARIABLES ########################################################
-bool forever = true;
 int socketfd; 
+pthread_t readThread;
 
 // #############################################################################
 // ############################# START MAIN SCRIPT #############################
 // #############################################################################
 int main(int argc, char * argv[])
 {
-  // ### LOAD PROGRAM PARAMETERS #############################################
+	// ### LOAD PROGRAM PARAMETERS #############################################
 	// Check the program arguments for nick & server settings
 	if (argc < 3)
 	{
@@ -35,7 +35,7 @@ int main(int argc, char * argv[])
 
 	if (argc >= 4)
 	{
-		port = strtol(argv[1], NULL, 10);
+		port = strtol(argv[3], NULL, 10);
 	}
 
 	// ### WATCH FOR INTERUPT SIGNAL ###########################################
@@ -72,18 +72,24 @@ int main(int argc, char * argv[])
 	}
 
 	// Send our nick to the server
-    write(socketfd, argv[1], strlen(argv[1]));
+	write(socketfd, argv[1], strlen(argv[1]));
 
 	// Let the user know we have connected
 	cout << "* Connection Successful! *" << endl;
 
 	// ### WATCH FOR DATA FROM THE SERVER ######################################
-	// create a new thread to watch for data
+	if (pthread_create(&readThread, NULL, readFromServer, NULL) != 0)
+	{
+		// Failed to create the thread, so kill the connection
+		cerr << "Error: Read thread creation failed!" << endl;
+		close(socketfd);
+		return 1;
+	}
 
 	// ### WATCH FOR DATA FROM THE CONSOLE #####################################
-    char buffer[226];
+	char buffer[226];
 
-	while (forever)
+	while (1)
 	{
 		cin >> buffer;
 
@@ -96,19 +102,20 @@ int main(int argc, char * argv[])
 		// Check if they are wanting to quit the application
 		else if (strcmp(buffer, "/exit") == 0 || strcmp(buffer, "/quit") == 0 || strcmp(buffer, "/part") == 0)
 		{
-			forever = false;
+			close(socketfd);
+			return 0;
 		}
 
 		// Else, send the input to the server and show it locally
 		else
 		{
 			write(socketfd, buffer, strlen(buffer));
-			cout << argv[1] << ": " << buffer;
 		}
 	}
 
 	// ### DISCONNECT FROM THE SERVER ##########################################
-    close(socketfd);
+	// Should never reach this, but just in case
+	close(socketfd);
 
 	return 0;
 }
@@ -139,8 +146,68 @@ void about()
 	cout << "*              About Simple Chat              *" << endl;
 	cout << "*                                             *" << endl;
 	cout << "* Authors: Brian Yarbrough & Madison Solarana *" << endl;
-	cout << "* Version: 0.1.0                              *" << endl;
+	cout << "* Version: 1.0.0 Alpha                        *" << endl;
 	cout << "***********************************************" << endl;
 
 	return;
+}
+
+/***
+|* @func	readFromServer
+|* @desc	Watches for data from the server. (For use with pthread_create only!)
+***/
+void * readFromServer(void * ptr)
+{
+	char buffer[226];
+	memset(buffer, '\0', 226);
+
+	// Read from the server
+	while (read(socketfd, buffer, 225))
+	{
+		// Check for server codes
+		if (strlen(buffer) == 11 && strcmp(strstr(buffer, " *"), " *") == 0)
+		{
+			char temp[7];
+
+			if (strcmp(strncpy(temp, buffer, 7), "* CODE ") == 0)
+			{
+				if (strcmp(buffer, "* CODE 00 *") == 0)
+				{
+					// Server is shutting down, let the user know
+					cout << "* Server shutting down! *" << endl;
+				}
+				else if (strcmp(buffer, "* CODE 01 *") == 0)
+				{
+					// Connection was closed becuase too many clients have connected already
+					cout << "* Connection closed! (Max Clients Exceeded) *" << endl;
+				}
+				else if (strcmp(buffer, "* CODE 02 *") == 0)
+				{
+					// Connection was closed becuase someone else is already using the nick requested
+					cout << "* Connection closed! (Nick Already In Use) *" << endl;
+				}
+				else if (strcmp(buffer, "* CODE 03 *") == 0)
+				{
+					// Connection was closed becuase of server failure
+					cout << "* Connection closed! (Internal Server Failure) *" << endl;
+				}
+				else
+				{
+					// Should never hit this, but just in case, let the user know what code was sent
+					cout << "* Unknown Server Code Received! (" << buffer[8] << buffer[9] << ") *";
+				}
+				
+				// Close the socket and exit (All known server codes will result in the server closing the connection with the client)
+				close(socketfd);
+				exit(0);
+			}
+		}
+
+		// Show the text & reset the buffer
+		cout << buffer << endl;
+		memset(buffer, '\0', 226);
+	}
+
+	// Close out this thread
+	pthread_exit(ptr);
 }
