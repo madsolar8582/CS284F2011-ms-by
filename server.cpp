@@ -27,21 +27,20 @@ char clientNicks[MAX_CLIENTS][31]; // Should not be changed!
 int main(int argc, char * argv[])
 {
 	// ### LOAD PROGRAM PARAMETERS #############################################
-	// Check the program arguments for port setting
 	unsigned short port = DEFAULT_PORT;
 
+	// Check the program arguments for port setting
 	if (argc >= 2)
 	{
 		port = strtol(argv[1], NULL, 10);
 	}
 
 	// ### SETUP THE SERVER ####################################################
-	// Create a stream socket
-	int newsfd;
 	struct sockaddr_in server_addr = { AF_INET, htons(port) };
 	struct sockaddr_in client_addr = { AF_INET };
 	socklen_t client_len = sizeof(client_addr);
 
+	// Create a stream socket
 	if ((socketfd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
 	{
 		cerr << "* Error: Socket Creation Failed! *" << endl;
@@ -71,6 +70,8 @@ int main(int argc, char * argv[])
 	signal(SIGINT, &signalHandler);
 
 	// ### LOOK FOR CONNECTING USERS ###########################################
+	int newsfd;
+
 	while ((newsfd = accept(socketfd, (struct sockaddr *) &client_addr, &client_len)) > 0)
 	{  
 		// Check if we are at MAX_CLIENTS currently
@@ -131,7 +132,7 @@ int main(int argc, char * argv[])
 				// Failed to create the thread, so remove the client, kill the connection and let the server know
 				currentConnections--;
 
-				cout << "* Connection to client failed! (Failed To Create New Thread) *" << endl;
+				cerr << "* Connection to client failed! (Failed To Create New Thread) *" << endl;
 				write(newsfd, "* CODE 03 *", 11);
 				close(newsfd);
 			}
@@ -202,7 +203,7 @@ void * handleClient(void * ptr)
 	}
 
 	// Start waiting for more responses from the client
-	memset(buffer, '\0', 256);
+	memset(buffer, '\0', 226);
 
 	while (read(clientSockets[clientID], buffer, 225) > 0)
 	{
