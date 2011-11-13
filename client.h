@@ -28,6 +28,6 @@ void about();
 |* @func	readFromServer
 |* @desc	Watches for data from the server. (For use with pthread_create only!)
 ***/
-void * readFromServer(void * ptr);
+void * readFromServer(void * dmyptr);
 
 #endif
