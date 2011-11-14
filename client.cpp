@@ -208,8 +208,19 @@ void * readFromServer(void * dmyptr)
 			}
 		}
 
+		// Correct for long usernames cuasing junk to be shown
+		if (strlen(buffer) < (strlen(nick) + 1))
+		{
+			for (unsigned short i = strlen(buffer); i < (strlen(nick) + 1); i++)
+			{
+				buffer[i] = ' ';
+			}
+		}
+
 		// Show the text & reset the buffer
 		cout << "\r" << buffer << endl;
+
+		// Reset the console for the next input/output
 		cout << nick << ": " << flush;
 		memset(buffer, '\0', 226);
 	}
