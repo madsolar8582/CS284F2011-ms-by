@@ -17,7 +17,7 @@ using namespace std;
 // ### GLOBAL VARIABLES ########################################################
 int socketfd; 
 pthread_t readThread;
-char nick[31];
+char nick[31], nickRemover[31];
 
 // #############################################################################
 // ############################# START MAIN SCRIPT #############################
@@ -33,6 +33,13 @@ int main(int argc, char * argv[])
 	}
 
 	strcpy(nick, argv[1]);
+
+	// Set up the nickRemover string for later use
+	memset(nickRemover, '\0', 31);
+	for (unsigned short i = 0; i < (strlen(nick) + 2); i++)
+	{
+		nickRemover[i] = '\b';
+	}
 
 	// Check the program arguments for port setting
 	unsigned short port = DEFAULT_PORT;
@@ -212,17 +219,8 @@ void * readFromServer(void * dmyptr)
 			}
 		}
 
-		// Correct for long usernames cuasing junk to be shown
-		if (strlen(buffer) < (strlen(nick) + 1))
-		{
-			for (unsigned short i = strlen(buffer); i < (strlen(nick) + 1); i++)
-			{
-				buffer[i] = ' ';
-			}
-		}
-
 		// Show the text
-		cout << "\r" << buffer << endl;
+		cout << nickRemover << buffer << endl;
 
 		// Reset the console for the next input
 		cout << nick << ": " << flush;
@@ -235,6 +233,9 @@ void * readFromServer(void * dmyptr)
 
 			// Wait 9 seconds
 			sleep(9);
+
+			// Remove the last username prompt from the screen
+			cout << nickRemover;
 
 			// Exit the program
 			exit(0);
