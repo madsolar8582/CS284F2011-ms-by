@@ -1,6 +1,7 @@
 /***
 |* Created by Brian Yarbrough & Madison Solarana
 |* Created on 11/12/2011
+|* Last Modified on 11/15/2011
 ***/
 
 // ### INCLUDES ################################################################
@@ -165,6 +166,7 @@ void * readFromServer(void * dmyptr)
 {
 	char buffer[226];
 	memset(buffer, '\0', 226);
+	bool closeConnection = false;
 
 	// Read from the server
 	while (read(socketfd, buffer, 225))
@@ -179,32 +181,34 @@ void * readFromServer(void * dmyptr)
 				if (strcmp(buffer, "* CODE 00 *") == 0)
 				{
 					// Server is shutting down, let the user know
-					cout << "* Server shutting down! *" << endl;
+					strcpy(buffer, "* Server shutting down! *");
 				}
 				else if (strcmp(buffer, "* CODE 01 *") == 0)
 				{
 					// Connection was closed becuase too many clients have connected already
-					cout << "* Connection closed! (Max Clients Exceeded) *" << endl;
+					strcpy(buffer, "* Connection closed! (Max Clients Exceeded) *");
 				}
 				else if (strcmp(buffer, "* CODE 02 *") == 0)
 				{
 					// Connection was closed becuase someone else is already using the nick requested
-					cout << "* Connection closed! (Nick Already In Use) *" << endl;
+					strcpy(buffer, "* Connection closed! (Nick Already In Use) *");
 				}
 				else if (strcmp(buffer, "* CODE 03 *") == 0)
 				{
 					// Connection was closed becuase of server failure
-					cout << "* Connection closed! (Internal Server Failure) *" << endl;
+					strcpy(buffer, "* Connection closed! (Internal Server Failure) *");
 				}
 				else
 				{
 					// Should never hit this, but just in case, let the user know what code was sent
-					cout << "* Unknown Server Code Received! (" << buffer[8] << buffer[9] << ") *";
+					char code[2] = {buffer[8], buffer[9]};
+					strcpy(buffer, "* Unknown Server Code Received! (");
+					strcat(buffer, code);
+					strcat(buffer, ") *");
 				}
-				
-				// Close the socket and exit (All known server codes will result in the server closing the connection with the client)
-				close(socketfd);
-				exit(0);
+
+				// Tell the program that we need to close now (All known server codes will result in the server closing the connection with the client)
+				closeConnection = true;				
 			}
 		}
 
@@ -220,8 +224,21 @@ void * readFromServer(void * dmyptr)
 		// Show the text & reset the buffer
 		cout << "\r" << buffer << endl;
 
-		// Reset the console for the next input/output
+		// Reset the console for the next input
 		cout << nick << ": " << flush;
+
+		// Check if we are to close the application
+		if (closeConnection)
+		{
+			// Wait 9 seconds
+			sleep(9);
+			
+			// Close the socket and exit
+			close(socketfd);
+			exit(0);
+		}
+
+		// Reset the buffer for the next output
 		memset(buffer, '\0', 226);
 	}
 
