@@ -221,7 +221,7 @@ void * readFromServer(void * dmyptr)
 			}
 		}
 
-		// Show the text & reset the buffer
+		// Show the text
 		cout << "\r" << buffer << endl;
 
 		// Reset the console for the next input
@@ -230,11 +230,13 @@ void * readFromServer(void * dmyptr)
 		// Check if we are to close the application
 		if (closeConnection)
 		{
+			// Close the socket
+			close(socketfd);
+
 			// Wait 9 seconds
 			sleep(9);
-			
-			// Close the socket and exit
-			close(socketfd);
+
+			// Exit the program
 			exit(0);
 		}
 
